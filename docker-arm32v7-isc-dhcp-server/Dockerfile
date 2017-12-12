@@ -1,33 +1,44 @@
 #Dockerfile for the arm32v7/isc-dhcp-server container
-FROM arm32v7/ubuntu:xenial
+FROM alpine:3.6
 MAINTAINER Matthew Baum atomicbaum1@gmail.com
 
-ARG DEBIAN_FRONTEND=noninteractive
-# && apt-get -q -y autoremove \
-# && apt-get -q -y clean \
-# && rm -rf /var/lib/apt/lists/*
+RUN addgroup -S dhcp && adduser -S -G dhcp dhcp
 
-# Expose the BOOTP port number
-EXPOSE 67
+# grab su-exec for easy step-down from root
+RUN apk add --no-cache 'su-exec>=0.2'
 
-# Environment variables
-ENV RUNLEVEL=1 \
-    TERM=linux \
-    DEBIAN_FRONTEND=noninteractive 
+ENV ISC_DHCP_SERVER_VERSION 4.3.6
+ENV ISC_DHCP_SERVER_DOWNLOAD_URL https://www.isc.org/downloads/file/dhcp-4-3-6/?version=tar-gz
+ENV ISC_DHCP_SERVER_DOWNLOAD_SHA
 
-RUN DEBIAN_FRONTEND=noninteractive TERM=linux RUNLEVEL=1 apt-get -q -y update && \
-    DEBIAN_FRONTEND=noninteractive TERM=linux RUNLEVEL=1 apt-get -q -y -o "DPkg::Options::=--force-confold" -o "DPkg::Options::=--force-confdef" install apt-utils
-# Install the DHCP server 
-RUN DEBIAN_FRONTEND=noninteractive TERM=linux RUNLEVEL=1 apt-get -q -y update && \
-    DEBIAN_FRONTEND=noninteractive TERM=linux RUNLEVEL=1 apt-get -q -y -o "DPkg::Options::=--force-confold" -o "DPkg::Options::=--force-confdef" install \
-      isc-dhcp-server \
-      isc-dhcp-server-ldap; \
-    touch /var/lib/dhcp/dhcpd.leases
+RUN set -ex; \
+        \
+        apk add --no-cache --virtual .build-deps \
+                coreutils \
+                gcc \
+                linux-headers \
+                make \
+                musl-dev \
+        ; \
+        \
+        wget -O isc-dhcp-server.tar.gz "$ISC_DHCP_SERVER_DOWNLOAD_URL"; \
+        #TODO: Check SHA \
+        mkdir -p /usr/src/isc-dhcp-server; \
+        tar -xzf isc-dhcp-server.tar.gz -C /usr/src/isc-dhcp-server --strip-components=1; \
+        rm isc-dhcp-server.tar.gz; \
+        \
+        make -C /usr/src/isc-dhcp-server -j "$(nproc)"; \
+        make -C /usr/src/isc-dhcp-server install; \
+        \
+        rm -r /usr/src/isc-dhcp-server; \
+        \
+        apk del .build-deps
 
 # Copy the support files over
 COPY support-files/dhcpd.conf /etc/dhcp/dhcpd.conf
 COPY support-files/isc-dhcp-server /etc/default/isc-dhcp-server
+COPY entrypoint.sh /usr/local/bin/
+ENTRYPOINT ["entrypoint.sh"]
 
-# Copy the entry point script and start it
-COPY ./entrypoint.sh /sbin/entrypoint.sh
-ENTRYPOINT ["/sbin/entrypoint.sh"]
+EXPOSE 67 68
+CMD ["/bin/sh"]
