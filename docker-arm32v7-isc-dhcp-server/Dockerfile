@@ -1,5 +1,5 @@
 #Dockerfile for the arm32v7/isc-dhcp-server container
-FROM alpine:3.6
+FROM alpine:3.5
 MAINTAINER Matthew Baum atomicbaum1@gmail.com
 
 RUN addgroup -S dhcp && adduser -S -G dhcp dhcp
@@ -19,6 +19,7 @@ RUN set -ex; \
         musl-dev \
         openssl \
         perl \
+        libgcc \
         ; \
         \
         #wget -O isc-dhcp-server.tar.gz "$ISC_DHCP_SERVER_DOWNLOAD_URL"; \
@@ -29,8 +30,8 @@ RUN set -ex; \
         (cd /usr/src/isc-dhcp-server && ./configure); \
         make -C /usr/src/isc-dhcp-server; \
         make -C /usr/src/isc-dhcp-server install; \
-        rm -r /usr/src/isc-dhcp-server; \
-        apk del .build-deps
+        rm -r /usr/src/isc-dhcp-server; 
+        #apk del .build-deps
 
 # Copy the support files over
 COPY support-files/dhcpd.conf /etc/dhcp/dhcpd.conf
