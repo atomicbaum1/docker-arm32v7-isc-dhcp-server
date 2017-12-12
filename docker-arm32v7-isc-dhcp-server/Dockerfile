@@ -1,32 +1,33 @@
-# Dockerfile for the arm32v7/isc-dhcp-server container
+#Dockerfile for the arm32v7/isc-dhcp-server container
 FROM arm32v7/ubuntu:xenial
 MAINTAINER Matthew Baum atomicbaum1@gmail.com
 
-# Environment variables
-## DEBIAN_FRONTEND: Disalbe the apt-get interactive post-install setup
-## __SUPPORT_FILES_ROOT_DIR: Support file direcotry
-ENV DEBIAN_FRONTEND=noninteractive \
-    __SUPPORT_FILES_ROOT_DIR=support-files 
+ARG DEBIAN_FRONTEND=noninteractive
+# && apt-get -q -y autoremove \
+# && apt-get -q -y clean \
+# && rm -rf /var/lib/apt/lists/*
 
-# Copy entrypoint
-COPY ./entrypoint.sh ./entrypoint.sh
-
-# Copy support files over to the tmp directory
-CMD ["mkdir", "/tmp/$__SUPPORT_FILES_ROOT_DIR"]
-
-# RUN Commands
-## Update the software
-## Install slapd and ldap-utils (ignore dpkg config errors - we config manually)
-## Clean up unused files
-#RUN apt-get update; \
-#    apt-get -y install \
-#        slapd \
-#        ldap-utils
-#    apt-get clean \
-#    && rm -rf /var/lib/apt/lists/*
-
-# Expose the BOOTP port number 
+# Expose the BOOTP port number
 EXPOSE 67
 
-# Start the entrypoint
-ENTRYPOINT ["./entrypoint.sh"]
+# Environment variables
+ENV RUNLEVEL=1 \
+    TERM=linux \
+    DEBIAN_FRONTEND=noninteractive 
+
+RUN DEBIAN_FRONTEND=noninteractive TERM=linux RUNLEVEL=1 apt-get -q -y update && \
+    DEBIAN_FRONTEND=noninteractive TERM=linux RUNLEVEL=1 apt-get -q -y -o "DPkg::Options::=--force-confold" -o "DPkg::Options::=--force-confdef" install apt-utils
+# Install the DHCP server 
+RUN DEBIAN_FRONTEND=noninteractive TERM=linux RUNLEVEL=1 apt-get -q -y update && \
+    DEBIAN_FRONTEND=noninteractive TERM=linux RUNLEVEL=1 apt-get -q -y -o "DPkg::Options::=--force-confold" -o "DPkg::Options::=--force-confdef" install \
+      isc-dhcp-server \
+      isc-dhcp-server-ldap; \
+    touch /var/lib/dhcp/dhcpd.leases
+
+# Copy the support files over
+COPY support-files/dhcpd.conf /etc/dhcp/dhcpd.conf
+COPY support-files/isc-dhcp-server /etc/default/isc-dhcp-server
+
+# Copy the entry point script and start it
+COPY ./entrypoint.sh /sbin/entrypoint.sh
+ENTRYPOINT ["/sbin/entrypoint.sh"]
